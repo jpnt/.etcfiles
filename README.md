@@ -1,5 +1,8 @@
 # etcfiles (system configs)
 
+Declarative, version-controlled system-level configurations.
+For user-level configurations(++): https://github.com/jpnt/.dotfiles
+
 ## How to use:
 
 ```sh
