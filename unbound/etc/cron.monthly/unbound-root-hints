@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+TMPFILE=$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
+
+# Fetch the latest root hints from IANA/Internic
+curl -fsSL https://www.internic.net/domain/named.root -o "$TMPFILE"
+
+# Validate: ensure file looks sane (should contain "A.ROOT-SERVERS.NET.")
+grep -q 'A\.ROOT-SERVERS\.NET\.' "$TMPFILE"
+
+# Move atomically into place
+mv "$TMPFILE" /var/lib/unbound/root.hints
+chown unbound:unbound /var/lib/unbound/root.hints
+chmod 644 /var/lib/unbound/root.hints
+
+# Validate Unbound configuration
+unbound-checkconf >/dev/null
+
+# Reload Unbound gracefully
+pkill -HUP unbound
+

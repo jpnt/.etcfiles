@@ -1,15 +1,78 @@
 #!/bin/sh
-[ $# -eq 1 ] || { echo "usage: $0 <dir>"; exit 1; }
-[ -d "$1" ] || { echo "error: $1 not found or is not a directory"; exit 1; }
+set -eu
 
-src="$1"
+usage() {
+    echo "usage: $0 [-n] [-f] <dir> [dir ...]" >&2
+    exit 1
+}
 
-find "$src" -type f -printf '%P\n' | while read -r rel_path; do
-    target_path="/$rel_path"
+DRYRUN=0
+FORCE=0
 
-    mkdir -p "$(dirname "$target_path")"
-    [ -e "$target_path" ] && mv "$target_path" "$target_path.bak"
-    cp "$src/$rel_path" "$target_path" && echo "Installed $src/$rel_path -> $target_path"
-    # if is something devious...
-    # chmod xxx "$target_path"
+while getopts "nf" opt; do
+    case "$opt" in
+        n) DRYRUN=1 ;;
+        f) FORCE=1 ;;
+        *) usage ;;
+    esac
 done
+shift $((OPTIND - 1))
+
+[ $# -ge 1 ] || usage
+
+[ "$(id -u)" -eq 0 ] || {
+    echo "error: must be run as root" >&2
+    exit 1
+}
+
+ignore_top() {
+    case "$1" in
+        _*|install.sh|README.md) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+link_file() {
+    src=$1
+    dst=$2
+
+    case "$dst" in
+        /*) ;;
+        *)
+            echo "fatal: non-absolute destination $dst" >&2
+            exit 1
+            ;;
+    esac
+
+    if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+        [ "$FORCE" -eq 1 ] || {
+            echo "skip (exists): $dst" >&2
+            return
+        }
+    fi
+
+    [ "$DRYRUN" -eq 1 ] && {
+        echo "ln -sf $src $dst"
+        return
+    }
+
+    mkdir -p "$(dirname "$dst")"
+    rm -f "$dst"
+    ln -s "$src" "$dst"
+    echo "installed $dst"
+}
+
+for mod in "$@"; do
+    [ -d "$mod" ] || {
+        echo "error: $mod not a directory" >&2
+        exit 1
+    }
+
+    ignore_top "$mod" && continue
+
+    (cd "$mod" && find . -type f | sed 's|^\./||') |
+    while read -r rel; do
+        link_file "$PWD/$mod/$rel" "/$rel"
+    done
+done
+

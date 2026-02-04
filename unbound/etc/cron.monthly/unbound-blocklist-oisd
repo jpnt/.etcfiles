@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+# Download OISD blocklists (normal + NSFW)
+curl -fsSL https://big.oisd.nl/unbound  -o "$TMPDIR/oisd-big.conf"
+curl -fsSL https://nsfw.oisd.nl/unbound -o "$TMPDIR/oisd-nsfw.conf"
+
+# Validate syntax before replacing live configs
+unbound-checkconf "$TMPDIR/oisd-big.conf"  >/dev/null
+unbound-checkconf "$TMPDIR/oisd-nsfw.conf" >/dev/null
+unbound-checkconf >/dev/null  # validate full config
+
+# Deploy atomically
+mv "$TMPDIR/oisd-big.conf"  /etc/unbound/unbound.conf.d/oisd-big.conf
+mv "$TMPDIR/oisd-nsfw.conf" /etc/unbound/unbound.conf.d/oisd-nsfw.conf
+
+# Reload unbound (HUP = graceful reload)
+pkill -HUP unbound
+
