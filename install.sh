@@ -52,13 +52,12 @@ link_file() {
     fi
 
     [ "$DRYRUN" -eq 1 ] && {
-        echo "ln -sf $src $dst"
+        echo "ln -f $src $dst"
         return
     }
 
     mkdir -p "$(dirname "$dst")"
-    rm -f "$dst"
-    ln -s "$src" "$dst"
+    ln -f "$src" "$dst"
     echo "installed $dst"
 }
 
